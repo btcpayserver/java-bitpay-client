@@ -1284,7 +1284,18 @@ public class Client {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode tokens = mapper.valueToTree(this._tokenCache);
             ((ObjectNode) this._configuration.getEnvConfig(this._env)).put("ApiTokens", tokens);
-            // TODO: write to parsed EnvConfig
+
+            // Update tokens in parallel EnvConfig object.
+            final Config.Tokens configTokens = this._configuration.getEnv().getTokens();
+            if (tokenExist(Facade.PointOfSale)) {
+                configTokens.setPointOfSale(getAccessToken(Facade.PointOfSale));
+            }
+            if (tokenExist(Facade.Merchant)) {
+                configTokens.setMerchant(getAccessToken(Facade.Merchant));
+            }
+            if (tokenExist(Facade.Payroll)) {
+                configTokens.setPayroll(getAccessToken(Facade.Payroll));
+            }
         } catch (Exception e) {
             throw new BitPayException("When trying to write the tokens : " + e.getMessage());
         }

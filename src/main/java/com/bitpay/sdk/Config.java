@@ -1,5 +1,6 @@
 package com.bitpay.sdk;
 
+import com.bitpay.sdk.model.Facade;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -10,6 +11,10 @@ public class Config {
     private String _environment;
     private JsonNode _envConfig;
 
+    /**
+     * Only keeping the JsonNode to help avoid future merge conflicts.
+     * Both should have the exact same data.
+     */
     private EnvConfig envConfig;
 
     public Config() {
@@ -78,7 +83,7 @@ public class Config {
         private Environment test;
         private Environment prod;
 
-        @JsonProperty("Test")
+        @JsonProperty(Env.Test)
         public Environment getTest() {
             return test;
         }
@@ -87,7 +92,7 @@ public class Config {
             this.test = test;
         }
 
-        @JsonProperty("Prod")
+        @JsonProperty(Env.Prod)
         public Environment getProd() {
             return prod;
         }
@@ -153,7 +158,7 @@ public class Config {
         private String merchant;
         private String payroll;
 
-        @JsonProperty("pos")
+        @JsonProperty(Facade.PointOfSale)
         public String getPointOfSale() {
             return pointOfSale;
         }
@@ -162,7 +167,7 @@ public class Config {
             this.pointOfSale = pointOfSale;
         }
 
-        @JsonProperty("merchant")
+        @JsonProperty(Facade.Merchant)
         public String getMerchant() {
             return merchant;
         }
@@ -171,7 +176,7 @@ public class Config {
             this.merchant = merchant;
         }
 
-        @JsonProperty("payroll")
+        @JsonProperty(Facade.Payroll)
         public String getPayroll() {
             return payroll;
         }
