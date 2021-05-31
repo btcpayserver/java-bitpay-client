@@ -43,7 +43,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
@@ -60,7 +59,6 @@ public class Client {
     private Config _configuration;
     private String _env;
     private Hashtable<String, String> _tokenCache; // {facade, token}
-    private String _configFilePath;
     private String _baseUrl;
     private ECKey _ecKey;
     private HttpClient _httpClient = null;
@@ -104,8 +102,7 @@ public class Client {
      */
     public Client(String configFilePath, HttpHost proxy) throws BitPayException {
         try {
-            this._configFilePath = configFilePath;
-            this.GetConfig();
+            this.GetConfig(configFilePath);
             this.initKeys();
             this.init(proxy);
         } catch (JsonProcessingException e) {
@@ -113,6 +110,28 @@ public class Client {
         } catch (URISyntaxException e) {
             throw new BitPayException("failed to deserialize BitPay server response (Config) : " + e.getMessage());
         } catch (Exception e) {
+            throw new BitPayException("failed to deserialize BitPay server response (Config) : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Constructor to use if you're sane.
+     *
+     * @param config See com.bitpay.sdk.Config#parseFromJson(java.lang.String)
+     * @param proxy  HttpHost Optional Proxy setting (set to NULL to ignore)
+     * @throws BitPayException
+     */
+    public Client(final Config config, final HttpHost proxy) throws BitPayException {
+        this._configuration = Objects.requireNonNull(config, "config can't be null");
+        this._env = Objects.requireNonNull(config.getEnvironment(), "environment can't be null");
+        try {
+            this.initKeys();
+            this.init(proxy);
+        } catch (JsonProcessingException e) {
+            throw new BitPayException("failed to deserialize BitPay server response (Config) : " + e.getMessage());
+        } catch (URISyntaxException e) {
+            throw new BitPayException("failed to deserialize BitPay server response (Config) : " + e.getMessage());
+        } catch (Exception e) { // just copied from other constructor, keeping same to prevent forgetting in future
             throw new BitPayException("failed to deserialize BitPay server response (Config) : " + e.getMessage());
         }
     }
@@ -1186,6 +1205,13 @@ public class Client {
     private void init(HttpHost proxyDetails) throws BitPayException {
         try {
             this._baseUrl = this._env.equals(Env.Test) ? Env.TestUrl : Env.ProdUrl;
+
+            // less future merge conflicts
+            final String configuredBaseUrl = this._configuration.getEnv().getBaseUrl();
+            if (configuredBaseUrl != null && !configuredBaseUrl.isEmpty()) {
+                this._baseUrl = configuredBaseUrl;
+            }
+
             if (proxyDetails != null) {
                 _httpClient = HttpClientBuilder.create().setProxy(proxyDetails).build();
             } else {
@@ -1208,10 +1234,10 @@ public class Client {
     private void initKeys() throws Exception, URISyntaxException {
         if (_ecKey == null) {
             try {
-                if (KeyUtils.privateKeyExists(this._configuration.getEnvConfig(this._env).path("PrivateKeyPath").toString().replace("\"", ""))) {
+                if (KeyUtils.privateKeyExists(this._configuration.getEnv().getPrivateKeyPath().replace("\"", ""))) {
                     _ecKey = KeyUtils.loadEcKey();
                 } else {
-                    String keyHex = this._configuration.getEnvConfig(this._env).path("PrivateKey").toString().replace("\"", "");
+                    String keyHex = this._configuration.getEnv().getPrivateKey().replace("\"", "");
                     if (!keyHex.isEmpty()) {
                         _ecKey = KeyUtils.createEcKeyFromHexString(keyHex);
                     }
@@ -1258,6 +1284,18 @@ public class Client {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode tokens = mapper.valueToTree(this._tokenCache);
             ((ObjectNode) this._configuration.getEnvConfig(this._env)).put("ApiTokens", tokens);
+
+            // Update tokens in parallel EnvConfig object.
+            final Config.Tokens configTokens = this._configuration.getEnv().getTokens();
+            if (tokenExist(Facade.PointOfSale)) {
+                configTokens.setPointOfSale(getAccessToken(Facade.PointOfSale));
+            }
+            if (tokenExist(Facade.Merchant)) {
+                configTokens.setMerchant(getAccessToken(Facade.Merchant));
+            }
+            if (tokenExist(Facade.Payroll)) {
+                configTokens.setPayroll(getAccessToken(Facade.Payroll));
+            }
         } catch (Exception e) {
             throw new BitPayException("When trying to write the tokens : " + e.getMessage());
         }
@@ -1497,14 +1535,14 @@ public class Client {
      * Loads the configuration file (JSON)
      *
      * @throws BitPayException BitPayException class
+     * @param configFilePath
      */
-    public void GetConfig() throws BitPayException {
+    public void GetConfig(final String configFilePath) throws BitPayException {
         try {
-            byte[] jsonData = Files.readAllBytes(Paths.get(this._configFilePath));
             //create ObjectMapper instance
             ObjectMapper mapper = new ObjectMapper();
             //read JSON like DOM Parser
-            JsonNode rootNode = mapper.readTree(jsonData);
+            JsonNode rootNode = mapper.readTree(Paths.get(configFilePath).toFile());
             JsonNode bitPayConfiguration = rootNode.path("BitPayConfiguration");
             this._configuration = new ObjectMapper().readValue(bitPayConfiguration.toString(), Config.class);
             this._env = this._configuration.getEnvironment();
@@ -1601,5 +1639,9 @@ public class Client {
      */
     public void setLoggerLevel(int loggerLevel) {
         _log = new BitPayLogger(loggerLevel);
+    }
+
+    public String getBaseUrl() {
+        return _baseUrl;
     }
 }
